@@ -1,0 +1,35 @@
+{
+  "project_info": {
+    "project_number": "90259520262",
+    "firebase_url": "https://mmsmartreply.firebaseio.com",
+    "project_id": "mmsmartreply",
+    "storage_bucket": "mmsmartreply.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:90259520262:android:d124603a04644aab",
+        "android_client_info": {
+          "package_name": "com.manoj.smartreply"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAxxgqUxH4ExaZh29SIAL-ovBere8s90F8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "90259520262-3gru913v2g2a764usles3160ok63jfjb.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
