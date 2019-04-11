@@ -53,7 +53,7 @@ class TextConverstionActivity : AppCompatActivity() {
                         var resultText = ""
                         var count = 1
                         for (suggestion in result.suggestions) {
-                            resultText = resultText + "$count. " + suggestion.text + "\n"
+                            resultText = resultText + "$count. " + suggestion.text + " (" + suggestion.confidence.toString() + ") \n"
                             count = count + 1
                         }
                         resultTextNode.setText(resultText)

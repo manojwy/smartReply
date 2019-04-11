@@ -166,8 +166,11 @@ class FileConverstionActivity : AppCompatActivity() {
                         var value = suggestion.text
                         value = value.replace("\"", "\\\"")
                         value = "\"" + value + "\""
-                        resultText = resultText + value + ","
-
+                        resultText = resultText + value + ",";
+                        value = suggestion.confidence.toString()
+                        value = value.replace("\"", "\\\"")
+                        value = "\"" + value + "\""
+                        resultText = resultText + value + ",";
                     }
                 }
 
