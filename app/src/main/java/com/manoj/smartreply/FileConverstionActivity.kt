@@ -19,20 +19,28 @@ import com.google.firebase.ml.naturallanguage.smartreply.FirebaseSmartReply
 import com.google.firebase.ml.naturallanguage.smartreply.FirebaseTextMessage
 import com.google.firebase.ml.naturallanguage.smartreply.SmartReplySuggestionResult
 import java.io.*
+import com.manoj.smartreply.SmartReplyUtil
 import java.util.jar.Manifest
+import android.graphics.Bitmap
+import android.os.Message
 
 
 class FileConverstionActivity : AppCompatActivity() {
 
     val READ_REQUEST_CODE: Int = 42
 
-    private var inputStream: InputStream? = null
-    private var fileReader: BufferedReader? = null
-    private var smartReply: FirebaseSmartReply? = null
-    private var bufferedWriter: BufferedWriter? = null
-    private var currentLine:String? = null
-    private var count = 1
-    private var fileUri: Uri? = null
+
+    val handler: Handler = object : Handler() {
+        override fun handleMessage(msg: Message) {
+            if (msg.what === 1) {
+                val resultTextNode = findViewById<TextView>(R.id.result)
+                resultTextNode.setText(msg.obj as String)
+            }
+            super.handleMessage(msg)
+        }
+    }
+
+    var smartReplyUtil = SmartReplyUtil(handler)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,32 +54,14 @@ class FileConverstionActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            if (fileUri != null) {
-
-                if (inputStream != null) {
-                    inputStream!!.close()
-                    inputStream = null
+            if (smartReplyUtil.fileUri != null) {
+                if (smartReplyUtil.fileReader != null) {
+                    Toast.makeText(applicationContext, "Wait!, I'm busy", Toast.LENGTH_LONG).show()
+                } else {
+                    smartReplyUtil.start()
                 }
-
-                if (fileReader != null) {
-                    fileReader!!.close()
-                    fileReader = null
-                }
-
-                inputStream = contentResolver.openInputStream(fileUri!!)
-                fileReader = BufferedReader(InputStreamReader(inputStream))
-
-                if (smartReply == null) {
-                    smartReply = FirebaseNaturalLanguage.getInstance().smartReply
-                    val file = File(Environment.getExternalStoragePublicDirectory(
-                        Environment.DIRECTORY_DOWNLOADS), "smart_reply_output.csv")
-                    bufferedWriter = BufferedWriter(FileWriter(file.path))
-                }
-
-                var line: String = fileReader!!.readLine()
-                processLine(line)
             } else {
-                Toast.makeText(applicationContext, "No file selected", Toast.LENGTH_LONG).show()
+                Toast.makeText(applicationContext, "No file selected, choose a file", Toast.LENGTH_LONG).show()
             }
         }
 
@@ -85,10 +75,10 @@ class FileConverstionActivity : AppCompatActivity() {
                 type = "text/*"
             }
 
-
-
             startActivityForResult(intent, READ_REQUEST_CODE)
         }
+
+        smartReplyUtil.appContext = applicationContext
 
     }
 
@@ -119,76 +109,10 @@ class FileConverstionActivity : AppCompatActivity() {
                 Log.i("MM", "Uri: $uri")
                 val filePathNode = findViewById<TextView>(R.id.filePath)
                 filePathNode.setText(uri.getPath())
-                fileUri = uri
+                smartReplyUtil.fileUri = uri
             }
         }
     }
 
-    fun processLine(line:String?)  {
-        if (line == null) {
-            val resultTextNode = findViewById<TextView>(R.id.result)
-            resultTextNode.setText("Done, total $count records processed\nOutput: Downloads/smart_reply_output.csv")
-            bufferedWriter!!.close()
-            bufferedWriter = null
-            currentLine = null
-            smartReply!!.close()
-            smartReply = null
-            inputStream!!.close()
-            inputStream = null
-            fileReader!!.close()
-            fileReader = null
-            count = 1
-            return
-        }
 
-        currentLine = line
-        val conversation = ArrayList<FirebaseTextMessage>()
-
-        conversation.add(FirebaseTextMessage.createForRemoteUser(
-            line.toString(), System.currentTimeMillis() - 1000, "Manoj"))
-
-        smartReply!!.suggestReplies(conversation)
-            .addOnSuccessListener { result ->
-
-                var value = currentLine!!
-                value = value.replace("\"", "\\\"")
-                value = "\"" + value + "\""
-                var resultText = value + ","
-
-                if (result.getStatus() == SmartReplySuggestionResult.STATUS_NOT_SUPPORTED_LANGUAGE) {
-                    // The conversation's language isn't supported, so the
-                    // the result doesn't contain any suggestions.
-                    val resultTextNode = findViewById<TextView>(R.id.result)
-                    resultTextNode.setText("Error: STATUS_NOT_SUPPORTED_LANGUAGE")
-                } else if (result.getStatus() == SmartReplySuggestionResult.STATUS_SUCCESS) {
-                    // Task completed successfully
-                    for (suggestion in result.suggestions) {
-                        var value = suggestion.text
-                        value = value.replace("\"", "\\\"")
-                        value = "\"" + value + "\""
-                        resultText = resultText + value + ",";
-                        value = suggestion.confidence.toString()
-                        value = value.replace("\"", "\\\"")
-                        value = "\"" + value + "\""
-                        resultText = resultText + value + ",";
-                    }
-                }
-
-                resultText = resultText + "\n"
-
-                bufferedWriter!!.write(resultText)
-                val resultTextNode = findViewById<TextView>(R.id.result)
-                resultTextNode.setText("Processed: $count")
-
-                count = count + 1
-                val line = fileReader!!.readLine()
-                processLine(line)
-            }
-            .addOnFailureListener {
-                // Task failed with an exception
-                val resultTextNode = findViewById<TextView>(R.id.result)
-                println("MM $it")
-                resultTextNode.setText("Exception: $it")
-            }
-    }
 }
