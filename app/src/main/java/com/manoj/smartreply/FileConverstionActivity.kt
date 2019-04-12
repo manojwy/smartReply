@@ -1,51 +1,58 @@
 package com.manoj.smartreply
 
 import android.app.Activity
-import android.content.Intent
+import android.app.job.JobInfo
+import android.app.job.JobScheduler
+import android.content.*
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.support.v7.app.AppCompatActivity
-import android.os.Bundle
-import android.os.Environment
-import android.os.Handler
-import android.support.v4.app.ActivityCompat
-import android.util.Log
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
 import com.google.firebase.FirebaseApp
-import com.google.firebase.ml.naturallanguage.FirebaseNaturalLanguage
-import com.google.firebase.ml.naturallanguage.smartreply.FirebaseSmartReply
-import com.google.firebase.ml.naturallanguage.smartreply.FirebaseTextMessage
-import com.google.firebase.ml.naturallanguage.smartreply.SmartReplySuggestionResult
-import java.io.*
-import com.manoj.smartreply.SmartReplyUtil
-import java.util.jar.Manifest
-import android.graphics.Bitmap
-import android.os.Message
+import android.os.*
+import android.support.v4.content.LocalBroadcastManager
+import android.util.Log
+import android.widget.EditText
 
 
 class FileConverstionActivity : AppCompatActivity() {
 
     val READ_REQUEST_CODE: Int = 42
-
-
-    val handler: Handler = object : Handler() {
-        override fun handleMessage(msg: Message) {
-            if (msg.what === 1) {
-                val resultTextNode = findViewById<TextView>(R.id.result)
-                resultTextNode.setText(msg.obj as String)
+    var filePath:String? = null
+    val broadCastReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == SmartReplyJobService.UPDATE_UI) {
+                val message = intent.extras.getString("message")
+                val msg = findViewById<EditText>(R.id.result)
+                msg.setText(message)
             }
-            super.handleMessage(msg)
         }
     }
 
-    var smartReplyUtil = SmartReplyUtil(handler)
+
+    fun isJobRunning(jobId: Int): Boolean {
+        val scheduler = applicationContext.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
+
+        var hasBeenScheduled = false
+
+        for (jobInfo in scheduler.allPendingJobs) {
+            if (jobInfo.id == jobId) {
+                hasBeenScheduled = true
+                break
+            }
+        }
+
+        return hasBeenScheduled
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val view = R.layout.activity_file_converstion
         setContentView(view)
+
+
+        registerReceiver();
 
         val suggestion = findViewById<Button>(R.id.button)
         suggestion.setOnClickListener {
@@ -54,20 +61,31 @@ class FileConverstionActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            if (smartReplyUtil.fileUri != null) {
-                if (smartReplyUtil.fileReader != null) {
+            if (filePath != null) {
+                if (isJobRunning(SmartReplyJobService.JOB_ID)) {
                     Toast.makeText(applicationContext, "Wait!, I'm busy", Toast.LENGTH_LONG).show()
-                } else {
-                    smartReplyUtil.start()
+                    return@setOnClickListener
                 }
+
+                val componentName = ComponentName(applicationContext, SmartReplyJobService::class.java!!)
+
+                val builder = JobInfo.Builder(SmartReplyJobService.JOB_ID, componentName)
+                val bundle = PersistableBundle()
+                bundle.putString("file_path", filePath)
+                builder.setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+                builder.setExtras(bundle)
+
+                val scheduler = applicationContext.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
+                scheduler.schedule(builder.build())
+
             } else {
                 Toast.makeText(applicationContext, "No file selected, choose a file", Toast.LENGTH_LONG).show()
             }
+
         }
 
         val button = findViewById<Button>(R.id.chooseFile)
         button.setOnClickListener {
-
             val filePathNode = findViewById<TextView>(R.id.filePath)
             filePathNode.setText("")
             val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
@@ -77,9 +95,11 @@ class FileConverstionActivity : AppCompatActivity() {
 
             startActivityForResult(intent, READ_REQUEST_CODE)
         }
+    }
 
-        smartReplyUtil.appContext = applicationContext
-
+    override fun onStop() {
+//        unRegisterReceiver()
+        super.onStop()
     }
 
     fun checkPermission(): Boolean {
@@ -106,13 +126,23 @@ class FileConverstionActivity : AppCompatActivity() {
             FirebaseApp.initializeApp(this);
 
             resultData?.data?.also { uri ->
-                Log.i("MM", "Uri: $uri")
                 val filePathNode = findViewById<TextView>(R.id.filePath)
                 filePathNode.setText(uri.getPath())
-                smartReplyUtil.fileUri = uri
+                filePath = uri.toString()
+//                Log.i("MM", "Uri: $uri")
+//                Log.i("MM", "filePath: $filePath")
             }
         }
     }
 
+    fun registerReceiver() {
 
+
+        LocalBroadcastManager.getInstance(applicationContext)
+            .registerReceiver(broadCastReceiver, IntentFilter(SmartReplyJobService.UPDATE_UI))
+    }
+
+    fun unRegisterReceiver() {
+        LocalBroadcastManager.getInstance(applicationContext).unregisterReceiver(broadCastReceiver)
+    }
 }
