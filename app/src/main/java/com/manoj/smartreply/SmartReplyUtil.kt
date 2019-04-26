@@ -89,7 +89,7 @@ class SmartReplyUtil(handler: Handler?) {
             smartReply = FirebaseNaturalLanguage.getInstance().smartReply
             val file = File(
                 Environment.getExternalStoragePublicDirectory(
-                    Environment.DIRECTORY_DOWNLOADS), "2smart_reply_output.csv")
+                    Environment.DIRECTORY_DOWNLOADS), "smart_reply_output.csv")
             bufferedWriter = BufferedWriter(FileWriter(file.path))
         }
 

@@ -72,7 +72,7 @@ class FileConverstionActivity : AppCompatActivity() {
                 val builder = JobInfo.Builder(SmartReplyJobService.JOB_ID, componentName)
                 val bundle = PersistableBundle()
                 bundle.putString("file_path", filePath)
-                builder.setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+                builder.setOverrideDeadline(0);
                 builder.setExtras(bundle)
 
                 val scheduler = applicationContext.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
@@ -95,6 +95,12 @@ class FileConverstionActivity : AppCompatActivity() {
 
             startActivityForResult(intent, READ_REQUEST_CODE)
         }
+
+//        val cancelBtn = findViewById<Button>(R.id.cancel_current_job)
+//        cancelBtn.setOnClickListener {
+//            val scheduler = applicationContext.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
+//            scheduler.cancel(SmartReplyJobService.JOB_ID)
+//        }
     }
 
     override fun onStop() {
