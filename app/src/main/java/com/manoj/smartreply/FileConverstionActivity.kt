@@ -23,7 +23,14 @@ class FileConverstionActivity : AppCompatActivity() {
     val broadCastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == SmartReplyJobService.UPDATE_UI) {
-                val message = intent.extras.getString("message")
+
+                var message = intent.extras.getString("message")
+                var type = intent.extras.getString("type")
+                Log.d(SmartReplyUtil.TAG, "BroadcastReceiver: " + message)
+
+                if (type.equals(SmartReplyJobService.TYPE_PROCESSED)) {
+                    message = message + " -> " + SmartReplyUtil.getStatusCount()
+                }
                 val msg = findViewById<EditText>(R.id.result)
                 msg.setText(message)
             }

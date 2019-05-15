@@ -4,23 +4,31 @@ import android.app.job.JobScheduler
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Bundle
 import android.os.Environment
-import android.os.Handler
-import android.os.Message
 import android.support.v4.content.LocalBroadcastManager
 import android.util.Log
-import android.widget.TextView
 import com.google.firebase.ml.naturallanguage.FirebaseNaturalLanguage
 import com.google.firebase.ml.naturallanguage.smartreply.FirebaseSmartReply
 import com.google.firebase.ml.naturallanguage.smartreply.FirebaseTextMessage
 import com.google.firebase.ml.naturallanguage.smartreply.SmartReplySuggestionResult
 import java.io.*
+import java.util.concurrent.Executors
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 
-class SmartReplyUtil(handler: Handler?) {
+class SmartReplyUtil() {
+    companion object {
+        val TAG = "SmartReplyUtil"
+        private var statusCount = 0
+
+        public fun getStatusCount() : Int{
+            return statusCount
+        }
+        @Synchronized public fun updateStatusCount() {
+            statusCount = statusCount + 1
+        }
+    }
 
     private var inputStream: InputStream? = null
 
@@ -29,8 +37,6 @@ class SmartReplyUtil(handler: Handler?) {
 //    private var currentLine:String? = null
     private var taskCount = 0
     private var completedTaskCount = 0
-
-    private var handler = handler
 
     private var startTime = System.currentTimeMillis()
     private var endTime = System.currentTimeMillis()
@@ -41,33 +47,14 @@ class SmartReplyUtil(handler: Handler?) {
 
     private var threadPoolExecutor:ThreadPoolExecutor? = null
 
-    val taskHandler: Handler = object : Handler() {
-        override fun handleMessage(msg: Message) {
-            if (msg.what === 2) {
-                completedTaskCount = completedTaskCount + 1
-            } else if(msg.what === 1) {
-                updateUI(msg.obj as String)
-            }
-            super.handleMessage(msg)
-        }
-    }
-
-
     fun updateUI(message:String) {
-        if (handler == null) {
-            Log.d("MM - updateUI", message)
-            var intent = Intent(appContext, FileConverstionActivity::class.java)
-            intent.action = SmartReplyJobService.UPDATE_UI
-            intent.putExtra("message", message)
-//            appContext!!.sendBroadcast(intent)
-            LocalBroadcastManager.getInstance(appContext!!).sendBroadcast(intent)
-            return
-        }
+        Log.d(SmartReplyUtil.TAG, "updateUI: " + message)
+        var intent = Intent(appContext, FileConverstionActivity::class.java)
+        intent.action = SmartReplyJobService.UPDATE_UI
+        intent.putExtra("message", message)
+        LocalBroadcastManager.getInstance(appContext!!).sendBroadcast(intent)
+        return
 
-        val msg = handler!!.obtainMessage()
-        msg.what = 1
-        msg.obj = message
-        handler!!.sendMessage(msg)
     }
 
 
@@ -81,6 +68,8 @@ class SmartReplyUtil(handler: Handler?) {
             fileReader!!.close()
             fileReader = null
         }
+
+        SmartReplyUtil.statusCount = 0;
 
         inputStream = appContext!!.contentResolver.openInputStream(fileUri!!)
         fileReader = BufferedReader(InputStreamReader(inputStream))
@@ -98,21 +87,33 @@ class SmartReplyUtil(handler: Handler?) {
         taskCount = 0
         startTime = System.currentTimeMillis()
 
-//        threadPoolExecutor = ThreadPoolExecutor(16, 32, 10,
-        threadPoolExecutor = ThreadPoolExecutor(1, 128, 0,
+
+        val threadPoolMaxSize = 64
+        threadPoolExecutor = ThreadPoolExecutor(1, threadPoolMaxSize, 0,
             TimeUnit.MILLISECONDS, LinkedBlockingQueue<Runnable>())
         var line: String? = fileReader!!.readLine()
+
         while(line != null) {
+            var currentPoolSize = taskCount - SmartReplyUtil.statusCount
+
+            Log.d(SmartReplyUtil.TAG, "Pool size: " + currentPoolSize + " ==> " + taskCount)
+
+            if (currentPoolSize > threadPoolMaxSize - 8) {
+                Log.d(SmartReplyUtil.TAG, "Pool size: " + currentPoolSize + ", on sleep")
+                Thread.sleep(100)
+                continue
+            }
             taskCount = taskCount + 1
             threadPoolExecutor!!.execute(
-                SmartReplyRunnable(line!!, taskCount, handler, taskHandler, bufferedWriter, smartReply!!)
+                SmartReplyRunnable(line!!, bufferedWriter, smartReply!!, appContext!!)
             )
+
             line = fileReader!!.readLine()
         }
 
-        Handler().postDelayed({
-            checkStatus()
-        }, 2)
+        Executors.newSingleThreadExecutor().execute {
+                checkStatus()
+        }
     }
 
     fun checkStatus() {
@@ -120,13 +121,18 @@ class SmartReplyUtil(handler: Handler?) {
             return
         }
 
-        if (completedTaskCount == taskCount) {
+        val current = SmartReplyUtil.statusCount
 
+        if (current == taskCount) {
             endTime = System.currentTimeMillis()
             val diff = (endTime - startTime)/(1000)
 
             threadPoolExecutor = null
-            updateUI("Done, total $completedTaskCount records processed\nOutput: Downloads/smart_reply_output.csv\nTime: $diff(s)")
+            updateUI("Done, total $current/$taskCount records processed\nOutput: " +
+                    "Downloads/smart_reply_output.csv\nTime: $diff(s)")
+            Log.d(SmartReplyUtil.TAG, "Done, total $current/$taskCount " +
+                    "records processed\nOutput: " +
+                    "Downloads/smart_reply_output.csv\nTime: $diff(s)")
             bufferedWriter!!.close()
             bufferedWriter = null
             inputStream!!.close()
@@ -137,51 +143,31 @@ class SmartReplyUtil(handler: Handler?) {
             smartReply = null
             val scheduler = appContext!!.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
             scheduler.cancel(SmartReplyJobService.JOB_ID)
-
         } else {
-            updateUI("Total $completedTaskCount/$taskCount records processed")
-
-            Handler().postDelayed({
-                checkStatus()
-            }, 100)
+            Thread.sleep(100)
+            checkStatus()
         }
     }
 }
 
 
 // Implementing the Runnable interface to implement threads.
-class SmartReplyRunnable(lineP: String, countP: Int, handlerP: Handler?, taskCompletionHandlerP: Handler,
-                         bufferedWriterP: BufferedWriter?, smartReplyP: FirebaseSmartReply): Runnable {
+class SmartReplyRunnable(lineP: String,
+                         bufferedWriterP: BufferedWriter?, smartReplyP: FirebaseSmartReply,
+                         appContextP:Context): Runnable {
 
-    private var handler = handlerP
-    private var taskCompletionHandler = taskCompletionHandlerP
     private var bufferedWriter = bufferedWriterP
     private var line = lineP
-    private var count = countP
     private var smartReply: FirebaseSmartReply = smartReplyP
+    private var appContext = appContextP
 
     public override fun run() {
-
+        Log.d(SmartReplyUtil.TAG, "Started thread")
         processLine(line)
 
     }
 
     fun processLine(line:String)  {
-//        if (line == null) {
-//            updateUI("Done, total $count records processed\nOutput: Downloads/smart_reply_output.csv")
-//            bufferedWriter!!.close()
-//            bufferedWriter = null
-//            currentLine = null
-//            smartReply!!.close()
-//            smartReply = null
-//            inputStream!!.close()
-//            inputStream = null
-//            fileReader!!.close()
-//            fileReader = null
-//            count = 1
-//            return
-//        }
-
         var currentLine = line
         val conversation = ArrayList<FirebaseTextMessage>()
 
@@ -189,7 +175,6 @@ class SmartReplyRunnable(lineP: String, countP: Int, handlerP: Handler?, taskCom
             FirebaseTextMessage.createForRemoteUser(
                 line.toString(), System.currentTimeMillis() - 1000, "Manoj"))
 
-//        FirebaseNaturalLanguage.getInstance().smartReply!!.
             smartReply.suggestReplies(conversation)
             .addOnSuccessListener { result ->
 
@@ -201,7 +186,7 @@ class SmartReplyRunnable(lineP: String, countP: Int, handlerP: Handler?, taskCom
                 if (result.getStatus() == SmartReplySuggestionResult.STATUS_NOT_SUPPORTED_LANGUAGE) {
                     // The conversation's language isn't supported, so the
                     // the result doesn't contain any suggestions.
-                    updateUI("Error: STATUS_NOT_SUPPORTED_LANGUAGE")
+                    updateUIInParent("NOT_SUPPORTED_LANGUAGE")
                 } else if (result.getStatus() == SmartReplySuggestionResult.STATUS_SUCCESS) {
                     // Task completed successfully
                     for (suggestion in result.suggestions) {
@@ -220,33 +205,22 @@ class SmartReplyRunnable(lineP: String, countP: Int, handlerP: Handler?, taskCom
 
                 bufferedWriter!!.write(resultText)
                 bufferedWriter!!.flush()
-
-                updateTaskCompletion()
+                updateUIInParent("Completed")
             }
             .addOnFailureListener {
-                updateUI("Exception: $it")
-                updateTaskCompletion()
+                updateUIInParent("Failure: $it")
             }
     }
 
 
-    fun updateTaskCompletion() {
-        val msg = taskCompletionHandler.obtainMessage()
-        msg.what = 2
-        taskCompletionHandler.sendMessage(msg)
-    }
-    fun updateUI(message:String) {
-        if (handler == null) {
-            Log.d("MM", message)
-            val msg = taskCompletionHandler.obtainMessage()
-            msg.what = 1
-            msg.obj = message
-            taskCompletionHandler.sendMessage(msg)
-            return
-        }
-        val msg = handler!!.obtainMessage()
-        msg.what = 1
-        msg.obj = message
-        handler!!.sendMessage(msg)
+    fun updateUIInParent(message:String) {
+        SmartReplyUtil.updateStatusCount()
+        Log.d(SmartReplyUtil.TAG, "updateUIInParent: " + message)
+        var intent = Intent(appContext, FileConverstionActivity::class.java)
+        intent.action = SmartReplyJobService.UPDATE_UI
+        intent.putExtra("message", message)
+        intent.putExtra("type", SmartReplyJobService.TYPE_PROCESSED)
+        LocalBroadcastManager.getInstance(appContext).sendBroadcast(intent)
+        return
     }
 }
