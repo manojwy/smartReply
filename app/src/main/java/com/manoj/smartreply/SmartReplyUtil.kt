@@ -90,10 +90,11 @@ class SmartReplyUtil(handler: Handler?) {
         inputStream = appContext!!.contentResolver.openInputStream(fileUri!!)
         fileReader = BufferedReader(InputStreamReader(inputStream))
 
-        var filename = "smart_reply_output_" + System.currentTimeMillis() + ".csv"
+        var filename = Utils.getFilenameFromPref(appContext!!)
+        if (filename == null || filename.isEmpty()) {
+            filename = "smart_reply_output_" + System.currentTimeMillis() + ".csv"
+        }
         completedTaskCount = 0
-
-
 
         Utils.updatePrefWithFilename(appContext!!, filename)
 
@@ -104,18 +105,15 @@ class SmartReplyUtil(handler: Handler?) {
                     Environment.DIRECTORY_DOWNLOADS
                 ), filename
             )
-            bufferedWriter = BufferedWriter(FileWriter(file.path))
+            bufferedWriter = BufferedWriter(FileWriter(file.path, true))
         }
 
 
         startTime = System.currentTimeMillis()
 
-
-        Log.d("MM", "FileName: " + Utils.getFilenameFromPref(appContext!!))
-        Log.d("MM", "LLP: " + Utils.getLLPFromPref(appContext!!))
-
         var lastProcessedLine = Utils.getLLPFromPref(appContext!!)
         moveToLine(lastProcessedLine)
+
         process()
     }
 
@@ -222,6 +220,11 @@ class SmartReplyUtil(handler: Handler?) {
         smartReply = null
         val scheduler = appContext!!.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
         scheduler.cancel(SmartReplyJobService.JOB_ID)
+
+        // reset pref
+        Utils.updatePrefWithFilename(appContext!!, "")
+        Utils.updatePrefWithLineNo(appContext!!, 0)
+        Utils.updatePrefWithSourceFilename(appContext!!, "")
     }
 }
 

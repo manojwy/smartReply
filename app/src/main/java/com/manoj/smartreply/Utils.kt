@@ -21,7 +21,7 @@ class Utils {
             editor.apply()
         }
 
-        fun getFilenameFromPref(context:Context): String {
+        fun getFilenameFromPref(context:Context): String? {
             val prefs = context.getSharedPreferences(prefName, Context.MODE_PRIVATE)
             val filename = prefs.getString("filename", null)
             return filename
@@ -32,5 +32,19 @@ class Utils {
             val llp = prefs.getLong("LLP", 0)
             return llp
         }
+
+        fun updatePrefWithSourceFilename(context:Context, filename:String) {
+            val editor = context.getSharedPreferences(prefName, Context.MODE_PRIVATE).edit()
+            editor.putString("sourcefilename", filename)
+            editor.apply()
+        }
+
+        fun getSourceFilenameFromPref(context:Context): String? {
+            val prefs = context.getSharedPreferences(prefName, Context.MODE_PRIVATE)
+            val filename = prefs.getString("sourcefilename", null)
+            return filename
+        }
+
+
     }
 }

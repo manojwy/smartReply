@@ -1,6 +1,7 @@
 package com.manoj.smartreply
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.app.job.JobInfo
 import android.app.job.JobScheduler
 import android.content.*
@@ -54,6 +55,19 @@ class FileConverstionActivity : AppCompatActivity() {
 
         registerReceiver();
 
+        var filename = Utils.getSourceFilenameFromPref(applicationContext)
+
+
+        if (filename != null && filename.isEmpty() == false) {
+            val filePathNode = findViewById<TextView>(R.id.filePath)
+            filePathNode.setText(filename)
+            filePath = filename
+        } else {
+            Utils.updatePrefWithFilename(applicationContext, "")
+            Utils.updatePrefWithLineNo(applicationContext, 0)
+        }
+
+
         val suggestion = findViewById<Button>(R.id.button)
         suggestion.setOnClickListener {
 
@@ -63,37 +77,77 @@ class FileConverstionActivity : AppCompatActivity() {
 
             if (filePath != null) {
                 if (isJobRunning(SmartReplyJobService.JOB_ID)) {
-                    Toast.makeText(applicationContext, "Wait!, I'm busy", Toast.LENGTH_LONG).show()
+                    showToast("Wait!, I'm busy")
                     return@setOnClickListener
                 }
 
-                val componentName = ComponentName(applicationContext, SmartReplyJobService::class.java!!)
 
-                val builder = JobInfo.Builder(SmartReplyJobService.JOB_ID, componentName)
-                val bundle = PersistableBundle()
-                bundle.putString("file_path", filePath)
-                builder.setOverrideDeadline(0);
-                builder.setExtras(bundle)
+                var filename = Utils.getFilenameFromPref(applicationContext)
 
-                val scheduler = applicationContext.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
-                scheduler.schedule(builder.build())
+                if (filename != null && filename.isEmpty() == false) {
+
+                    val alertDialogBuilder = AlertDialog.Builder(this)
+
+                    alertDialogBuilder.setTitle("Smart Reply Util")
+                    alertDialogBuilder.setMessage("Looks like last job was not completed successfully, do you want to continue?")
+                    alertDialogBuilder.setPositiveButton("Continue") {dialog, which ->
+                        scheduleJob()
+                    }
+                    alertDialogBuilder.setNegativeButton("Restart") {dialog, which ->
+                        Utils.updatePrefWithFilename(applicationContext, "")
+                        Utils.updatePrefWithLineNo(applicationContext, 0)
+                        scheduleJob()
+                    }
+                    alertDialogBuilder.setNeutralButton("Cancel") {dialog, which ->
+                    }
+                    val dialog: AlertDialog = alertDialogBuilder.create()
+
+                    // Display the alert dialog on app interface
+                    dialog.show()
+                } else {
+                    scheduleJob()
+                }
 
             } else {
-                Toast.makeText(applicationContext, "No file selected, choose a file", Toast.LENGTH_LONG).show()
+                showToast("No file selected, choose a file")
             }
 
         }
 
         val button = findViewById<Button>(R.id.chooseFile)
         button.setOnClickListener {
-            val filePathNode = findViewById<TextView>(R.id.filePath)
-            filePathNode.setText("")
-            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                addCategory(Intent.CATEGORY_OPENABLE)
-                type = "text/*"
+
+            if (isJobRunning(SmartReplyJobService.JOB_ID)) {
+                showToast("Wait!, I'm busy")
+                return@setOnClickListener
             }
 
-            startActivityForResult(intent, READ_REQUEST_CODE)
+            var filename = Utils.getFilenameFromPref(applicationContext)
+
+            if (filename != null && filename.isEmpty() == false) {
+
+                val alertDialogBuilder = AlertDialog.Builder(this)
+
+                alertDialogBuilder.setTitle("Smart Reply Util")
+                alertDialogBuilder.setMessage("Looks like last job was not completed successfully, do you want to continue?")
+                alertDialogBuilder.setPositiveButton("Continue") {dialog, which ->
+                    scheduleJob()
+                }
+                alertDialogBuilder.setNegativeButton("Restart") {dialog, which ->
+                    Utils.updatePrefWithFilename(applicationContext, "")
+                    Utils.updatePrefWithLineNo(applicationContext, 0)
+                    scheduleJob()
+                }
+                alertDialogBuilder.setNeutralButton("Cancel") {dialog, which ->
+                    openFilePicker()
+                }
+                val dialog: AlertDialog = alertDialogBuilder.create()
+
+                // Display the alert dialog on app interface
+                dialog.show()
+            } else {
+                openFilePicker()
+            }
         }
 
 //        val cancelBtn = findViewById<Button>(R.id.cancel_current_job)
@@ -101,6 +155,39 @@ class FileConverstionActivity : AppCompatActivity() {
 //            val scheduler = applicationContext.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
 //            scheduler.cancel(SmartReplyJobService.JOB_ID)
 //        }
+    }
+
+    fun showToast(msg:String) {
+        val toast = Toast.makeText(applicationContext, msg, Toast.LENGTH_LONG)
+        val view = toast.getView()
+        val text = view.findViewById<TextView>(android.R.id.message)
+        text.setTextColor(applicationContext.getColor(android.R.color.holo_red_dark))
+        toast.show()
+
+    }
+
+    fun openFilePicker() {
+        val filePathNode = findViewById<TextView>(R.id.filePath)
+        filePathNode.setText("")
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "text/*"
+        }
+
+        startActivityForResult(intent, READ_REQUEST_CODE)
+    }
+
+    fun scheduleJob() {
+        val componentName = ComponentName(applicationContext, SmartReplyJobService::class.java!!)
+
+        val builder = JobInfo.Builder(SmartReplyJobService.JOB_ID, componentName)
+        val bundle = PersistableBundle()
+        bundle.putString("file_path", filePath)
+        builder.setOverrideDeadline(0);
+        builder.setExtras(bundle)
+
+        val scheduler = applicationContext.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
+        scheduler.schedule(builder.build())
     }
 
     override fun onStop() {
@@ -113,7 +200,7 @@ class FileConverstionActivity : AppCompatActivity() {
             == PackageManager.PERMISSION_GRANTED) {
             return true;
         } else {
-            Toast.makeText(applicationContext, "Require storage permission from app info", Toast.LENGTH_LONG).show()
+            showToast("Require storage permission from app info")
             return false;
         }
     }
@@ -135,6 +222,7 @@ class FileConverstionActivity : AppCompatActivity() {
                 val filePathNode = findViewById<TextView>(R.id.filePath)
                 filePathNode.setText(uri.getPath())
                 filePath = uri.toString()
+                Utils.updatePrefWithSourceFilename(applicationContext, filePath!!)
 //                Log.i("MM", "Uri: $uri")
 //                Log.i("MM", "filePath: $filePath")
             }
