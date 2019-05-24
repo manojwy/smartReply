@@ -12,20 +12,19 @@
             android:supportsRtl="true"
             android:theme="@style/AppTheme">
         <activity android:name=".MainActivity">
+        </activity>
+        <activity android:name=".TextConverstionActivity">
+        </activity>
+        <activity android:name=".FileConverstionActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        <activity android:name=".TextConverstionActivity">
-        </activity>
-        <activity android:name=".FileConverstionActivity">
-        </activity>
 
         <service
                 android:name="com.manoj.smartreply.SmartReplyJobService"
                 android:permission="android.permission.BIND_JOB_SERVICE"/>
-
     </application>
 
 </manifest>

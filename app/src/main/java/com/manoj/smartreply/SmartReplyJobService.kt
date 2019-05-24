@@ -5,14 +5,13 @@ import android.app.job.JobService
 import android.net.Uri
 import android.util.Log
 import java.io.File
+import java.util.concurrent.Executor
+import java.util.concurrent.Executors
 
 class SmartReplyJobService: JobService() {
     companion object {
-        val UPDATE_UI = "com.manoj.smartreply.UPDATE_UI"
-        val JOB_ID: Int = 12007
     }
 
-    var smartReplyUtil = SmartReplyUtil(null)
 
     override fun onStartJob(params: JobParameters): Boolean {
 
@@ -22,9 +21,13 @@ class SmartReplyJobService: JobService() {
 
         Log.i("MM", "Uri: $uri")
 
-        smartReplyUtil.fileUri = uri
-        smartReplyUtil.appContext = applicationContext
-        smartReplyUtil.start()
+        var smartReplyUtil = SmartReplyUtil(null)
+
+        Executors.newSingleThreadExecutor().execute {
+            smartReplyUtil.fileUri = uri
+            smartReplyUtil.appContext = applicationContext
+            smartReplyUtil.start()
+        }
 
         return true
     }

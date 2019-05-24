@@ -26,7 +26,9 @@ import android.content.SharedPreferences
 
 
 class SmartReplyUtil(handler: Handler?) {
-
+    companion object {
+        var IS_RUNNING = false
+    }
 
     private var inputStream: InputStream? = null
 
@@ -43,40 +45,24 @@ class SmartReplyUtil(handler: Handler?) {
     public var fileReader: BufferedReader? = null
     public var appContext:Context? = null
     public var fileUri: Uri? = null
+    public var filename: String? = ""
 
-//    private var threadPoolExecutor:ThreadPoolExecutor? = null
-
-    val taskHandler: Handler = object : Handler() {
-        override fun handleMessage(msg: Message) {
-            if (msg.what === 2) {
-                completedTaskCount = completedTaskCount + 1
-            } else if(msg.what === 1) {
-                updateUI(msg.obj as String)
-            }
-            super.handleMessage(msg)
+    fun updateUI(message: String, completed:Boolean) {
+        Log.d("MM - updateUI", message)
+        var intent = Intent(appContext, FileConverstionActivity::class.java)
+        if (completed == true) {
+            intent.action = Utils.COMPLETED_JOB
+        } else {
+            intent.action = Utils.UPDATE_UI
         }
-    }
-
-
-    fun updateUI(message:String) {
-        if (handler == null) {
-            Log.d("MM - updateUI", message)
-            var intent = Intent(appContext, FileConverstionActivity::class.java)
-            intent.action = SmartReplyJobService.UPDATE_UI
-            intent.putExtra("message", message)
-//            appContext!!.sendBroadcast(intent)
-            LocalBroadcastManager.getInstance(appContext!!).sendBroadcast(intent)
-            return
-        }
-
-        val msg = handler!!.obtainMessage()
-        msg.what = 1
-        msg.obj = message
-        handler!!.sendMessage(msg)
+        intent.putExtra("message", message)
+        LocalBroadcastManager.getInstance(appContext!!).sendBroadcast(intent)
+        return
     }
 
 
     fun start() {
+        IS_RUNNING = true
         if (inputStream != null) {
             inputStream!!.close()
             inputStream = null
@@ -88,15 +74,25 @@ class SmartReplyUtil(handler: Handler?) {
         }
 
         inputStream = appContext!!.contentResolver.openInputStream(fileUri!!)
+
+        if (inputStream == null) {
+            onClose()
+            return
+        }
         fileReader = BufferedReader(InputStreamReader(inputStream))
 
-        var filename = Utils.getFilenameFromPref(appContext!!)
-        if (filename == null || filename.isEmpty()) {
-            filename = "smart_reply_output_" + System.currentTimeMillis() + ".csv"
+        if (fileReader == null) {
+            onClose()
+            return
+        }
+
+        filename = Utils.getFilenameFromPref(appContext!!)
+        if (filename == null || filename!!.isEmpty()) {
+            filename = "SRU_O_" + System.currentTimeMillis() + ".csv"
         }
         completedTaskCount = 0
 
-        Utils.updatePrefWithFilename(appContext!!, filename)
+        Utils.updatePrefWithFilename(appContext!!, filename!!)
 
         if (smartReply == null) {
             smartReply = FirebaseNaturalLanguage.getInstance().smartReply
@@ -118,6 +114,10 @@ class SmartReplyUtil(handler: Handler?) {
     }
 
     fun moveToLine(lineNo:Long): Boolean {
+
+        if (lineNo > 0) {
+            updateUI("Finding last processed line...", false)
+        }
         while (completedTaskCount < lineNo) {
             var line = getNextLine()
             if (line == null) {
@@ -130,12 +130,16 @@ class SmartReplyUtil(handler: Handler?) {
     }
 
     fun process() {
+
+        if (SmartReplyUtil.IS_RUNNING == false) {
+            checkStatus(true)
+            return
+        }
+
         var line = getNextLine()
 
         if (line == null) {
-            Handler().postDelayed({
-                checkStatus()
-            }, 2)
+            checkStatus(false)
             return
         }
 
@@ -158,12 +162,12 @@ class SmartReplyUtil(handler: Handler?) {
                 var value = currentLine
                 value = value.replace("\"", "\\\"")
                 value = "\"" + value + "\""
-                var resultText = "" + lineCount + value + ","
+                var resultText = "" + lineCount + "," +  value + ","
 
                 if (result.getStatus() == SmartReplySuggestionResult.STATUS_NOT_SUPPORTED_LANGUAGE) {
                     // The conversation's language isn't supported, so the
                     // the result doesn't contain any suggestions.
-                    updateUI("Error: STATUS_NOT_SUPPORTED_LANGUAGE")
+                    updateUI("Error: STATUS_NOT_SUPPORTED_LANGUAGE", false)
                 } else if (result.getStatus() == SmartReplySuggestionResult.STATUS_SUCCESS) {
                     // Task completed successfully
                     for (suggestion in result.suggestions) {
@@ -194,7 +198,7 @@ class SmartReplyUtil(handler: Handler?) {
     fun updateTaskCompletion() {
         completedTaskCount = completedTaskCount + 1
         Utils.updatePrefWithLineNo(appContext!!, completedTaskCount)
-        updateUI("Completed: $completedTaskCount")
+        updateUI("Completed: $completedTaskCount", false)
         process()
     }
 
@@ -204,27 +208,50 @@ class SmartReplyUtil(handler: Handler?) {
     }
 
 
-    fun checkStatus() {
+    fun checkStatus(stopStatus:Boolean) {
         endTime = System.currentTimeMillis()
         val diff = (endTime - startTime) / (1000)
+        var status = "Done"
 
-//        threadPoolExecutor = null
-        updateUI("Done, total $completedTaskCount records processed\nOutput: Downloads/smart_reply_output.csv\nTime: $diff(s)")
-        bufferedWriter!!.close()
-        bufferedWriter = null
-        inputStream!!.close()
-        inputStream = null
-        fileReader!!.close()
-        fileReader = null
-        smartReply!!.close()
-        smartReply = null
+        if (stopStatus == true) {
+            status = "Stopped"
+        }
+
+        val file = filename!!
+        updateUI("$status, total $completedTaskCount records processed\nOutput: Downloads/$file\nTime: $diff(s)", true)
+        onClose()
+    }
+
+    fun onClose() {
+        if (bufferedWriter != null) {
+            bufferedWriter!!.close()
+            bufferedWriter = null
+        }
+
+        if (inputStream != null) {
+            inputStream!!.close()
+            inputStream = null
+
+        }
+
+        if (fileReader != null) {
+            fileReader!!.close()
+            fileReader = null
+        }
+
+        if (smartReply != null) {
+            smartReply!!.close()
+            smartReply = null
+        }
+
         val scheduler = appContext!!.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
-        scheduler.cancel(SmartReplyJobService.JOB_ID)
+        scheduler.cancel(Utils.JOB_ID)
 
         // reset pref
         Utils.updatePrefWithFilename(appContext!!, "")
         Utils.updatePrefWithLineNo(appContext!!, 0)
         Utils.updatePrefWithSourceFilename(appContext!!, "")
+        IS_RUNNING = false
     }
 }
 

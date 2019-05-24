@@ -16,6 +16,16 @@
             android:layout_height="50dp"
             android:id="@+id/chooseFile"/>
 
+    <Button
+            android:text="Stop Job"
+            android:visibility="gone"
+            android:layout_width="match_parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent" android:layout_marginTop="20dp"
+            android:layout_marginStart="10dp"
+            android:layout_height="50dp"
+            android:id="@+id/stopjob"/>
+
     <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

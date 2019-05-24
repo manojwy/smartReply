@@ -5,9 +5,11 @@ import android.content.Context
 
 class Utils {
     companion object {
+        val COMPLETED_JOB = "com.manoj.smartreply.COMPLETED_JOB"
         val UPDATE_UI = "com.manoj.smartreply.UPDATE_UI"
         val JOB_ID: Int = 12007
         val prefName = "com.manoj.smartreply.pref"
+
 
         fun updatePrefWithLineNo(context:Context, lineNo:Long) {
             val editor = context.getSharedPreferences(prefName, Context.MODE_PRIVATE).edit()
@@ -45,6 +47,21 @@ class Utils {
             return filename
         }
 
+        fun isCrashRecovery(context: Context):Boolean {
+            var srcFilename = Utils.getSourceFilenameFromPref(context)
+            var tgtFilename = Utils.getFilenameFromPref(context)
+            var lineNo = Utils.getLLPFromPref(context)
+
+
+            if (srcFilename == null || srcFilename.isEmpty() || tgtFilename == null || tgtFilename.isEmpty()) {
+                Utils.updatePrefWithSourceFilename(context, "")
+                Utils.updatePrefWithFilename(context, "")
+                Utils.updatePrefWithLineNo(context, 0)
+                return false
+            }
+
+            return true
+        }
 
     }
 }
