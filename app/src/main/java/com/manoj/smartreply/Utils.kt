@@ -13,37 +13,37 @@ class Utils {
 
         fun updatePrefWithLineNo(context:Context, lineNo:Long) {
             val editor = context.getSharedPreferences(prefName, Context.MODE_PRIVATE).edit()
-            editor.putLong("LLP", lineNo)
+            editor.putLong("LLP1", lineNo)
             editor.apply()
         }
 
         fun updatePrefWithFilename(context:Context, filename:String) {
             val editor = context.getSharedPreferences(prefName, Context.MODE_PRIVATE).edit()
-            editor.putString("filename", filename)
+            editor.putString("filename1", filename)
             editor.apply()
         }
 
         fun getFilenameFromPref(context:Context): String? {
             val prefs = context.getSharedPreferences(prefName, Context.MODE_PRIVATE)
-            val filename = prefs.getString("filename", null)
+            val filename = prefs.getString("filename1", null)
             return filename
         }
 
         fun getLLPFromPref(context:Context): Long {
             val prefs = context.getSharedPreferences(prefName, Context.MODE_PRIVATE)
-            val llp = prefs.getLong("LLP", 0)
+            val llp = prefs.getLong("LLP1", 0)
             return llp
         }
 
         fun updatePrefWithSourceFilename(context:Context, filename:String) {
             val editor = context.getSharedPreferences(prefName, Context.MODE_PRIVATE).edit()
-            editor.putString("sourcefilename", filename)
+            editor.putString("sourcefilename1", filename)
             editor.apply()
         }
 
         fun getSourceFilenameFromPref(context:Context): String? {
             val prefs = context.getSharedPreferences(prefName, Context.MODE_PRIVATE)
-            val filename = prefs.getString("sourcefilename", null)
+            val filename = prefs.getString("sourcefilename1", null)
             return filename
         }
 

@@ -15,17 +15,19 @@ import android.support.v4.content.ContextCompat.getSystemService
 import android.view.inputmethod.InputMethodManager
 
 
-class TextConverstionActivity : AppCompatActivity() {
+class TextConversionActivity : AppCompatActivity() {
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val view = R.layout.activity_text_converstion
+        val view = R.layout.activity_text_conversion
         setContentView(view)
 
         val heTextNode = findViewById<EditText>(R.id.he)
         val resultTextNode = findViewById<EditText>(R.id.result)
+
+        setTitle("SmartReply Util: Using text")
 
         val button = findViewById<Button>(R.id.button)
         button.setOnClickListener {

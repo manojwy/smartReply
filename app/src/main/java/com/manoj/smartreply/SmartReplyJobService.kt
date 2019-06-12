@@ -17,14 +17,13 @@ class SmartReplyJobService: JobService() {
 
         Log.d("MM", "SmartReplyJobService: onStartJob")
         val path = params.extras.getString("file_path")
-        val uri = Uri.parse(path)
 
-        Log.i("MM", "Uri: $uri")
+        Log.i("MM", "Uri: $path")
 
         var smartReplyUtil = SmartReplyUtil(null)
 
         Executors.newSingleThreadExecutor().execute {
-            smartReplyUtil.fileUri = uri
+            smartReplyUtil.fileUri = path;
             smartReplyUtil.appContext = applicationContext
             smartReplyUtil.start()
         }

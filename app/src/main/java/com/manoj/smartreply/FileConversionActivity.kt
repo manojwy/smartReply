@@ -1,5 +1,6 @@
 package com.manoj.smartreply
 
+import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.job.JobInfo
@@ -13,13 +14,22 @@ import android.widget.TextView
 import android.widget.Toast
 import com.google.firebase.FirebaseApp
 import android.os.*
+import android.provider.ContactsContract
 import android.support.v4.content.LocalBroadcastManager
 import android.util.Log
 import android.view.View
 import android.widget.EditText
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.io.IOException
+import android.provider.OpenableColumns
+import android.support.v4.app.ActivityCompat
+import android.support.v4.content.ContextCompat
+import java.util.concurrent.Executors
 
 
-class FileConverstionActivity : AppCompatActivity() {
+class FileConversionActivity : AppCompatActivity() {
 
     val READ_REQUEST_CODE: Int = 42
     var filePath:String? = null
@@ -61,14 +71,30 @@ class FileConverstionActivity : AppCompatActivity() {
         return SmartReplyUtil.IS_RUNNING
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        val view = R.layout.activity_file_converstion
-        setContentView(view)
+    private fun requestPermission() {
+        val requestPermissionArray = arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE)
+        ActivityCompat.requestPermissions(this, requestPermissionArray, 100)
+    }
 
 
-        registerReceiver();
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
 
+        if (grantResults.size == 0) {
+            showToast("Require storage permission from app info")
+            return
+        }
+
+        val grantResult = grantResults[0]
+
+        if(grantResult == PackageManager.PERMISSION_GRANTED && requestCode == 100) {
+            checkJobStatus();
+        } else {
+            showToast("Require storage permission from app info")
+        }
+    }
+
+    fun checkJobStatus() {
         if (SmartReplyUtil.IS_RUNNING == true) {
             val chooseFileBtn = findViewById<Button>(R.id.chooseFile)
             chooseFileBtn.visibility = View.GONE
@@ -86,6 +112,24 @@ class FileConverstionActivity : AppCompatActivity() {
             filePathNode.setText(srcFilename)
             filePath = srcFilename
             scheduleJob()
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val view = R.layout.activity_file_conversion
+        setContentView(view)
+
+        registerReceiver();
+        setTitle("SmartReply Util: Using file")
+
+        // check permission
+        if (checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED ||
+            checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            requestPermission();
+            showToast("Require storage permission")
+        } else {
+            checkJobStatus();
         }
 
         val suggestion = findViewById<Button>(R.id.button)
@@ -117,6 +161,11 @@ class FileConverstionActivity : AppCompatActivity() {
             }
 
             openFilePicker()
+        }
+
+        var textConvert = findViewById<Button>(R.id.textConvert)
+        textConvert.setOnClickListener {
+            startActivity(Intent(this@FileConversionActivity, TextConversionActivity::class.java))
         }
 
         val stopJobBtn = findViewById<Button>(R.id.stopjob)
@@ -176,6 +225,13 @@ class FileConverstionActivity : AppCompatActivity() {
             type = "text/*"
         }
 
+
+
+            var uri = Uri.parse(Environment.getExternalStoragePublicDirectory(
+            Environment.DIRECTORY_DOWNLOADS).path)
+
+        intent.setDataAndType(uri, "text/*")
+
         startActivityForResult(intent, READ_REQUEST_CODE)
     }
 
@@ -215,6 +271,28 @@ class FileConverstionActivity : AppCompatActivity() {
         }
     }
 
+    fun getFileName(uri: Uri): String {
+        var result: String? = null
+        if (uri.scheme == "content") {
+            val cursor = contentResolver.query(uri, null, null, null, null)
+            try {
+                if (cursor != null && cursor.moveToFirst()) {
+                    result = cursor.getString(cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME))
+                }
+            } finally {
+                cursor!!.close()
+            }
+        }
+        if (result == null) {
+            result = uri.path
+            val cut = result!!.lastIndexOf('/')
+            if (cut != -1) {
+                result = result.substring(cut + 1)
+            }
+        }
+        return result
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, resultData: Intent?) {
 
         // The ACTION_OPEN_DOCUMENT intent was sent with the request code
@@ -229,13 +307,26 @@ class FileConverstionActivity : AppCompatActivity() {
             FirebaseApp.initializeApp(this);
 
             resultData?.data?.also { uri ->
-                filePath = uri.toString()
-                findViewById<TextView>(R.id.filePath).setText(filePath!!)
-                Utils.updatePrefWithSourceFilename(applicationContext, filePath!!)
-                findViewById<EditText>(R.id.result).setText("")
+                var fname = getFileName(uri);
+
+                val srcFile = File(
+                    Environment.getExternalStoragePublicDirectory(
+                        Environment.DIRECTORY_DOWNLOADS
+                    ), fname
+                )
+
+                if (srcFile == null) {
+                    findViewById<TextView>(R.id.filePath).setText("Invalid file!, file need to be in Download folder")
+                } else {
+                    filePath = fname
+                    findViewById<TextView>(R.id.filePath).setText(filePath)
+                    Utils.updatePrefWithSourceFilename(applicationContext, filePath!!)
+                    findViewById<EditText>(R.id.result).setText("")
+                }
             }
         }
     }
+
 
     fun registerReceiver() {
         LocalBroadcastManager.getInstance(applicationContext)

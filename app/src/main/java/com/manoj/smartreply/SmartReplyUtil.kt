@@ -44,12 +44,12 @@ class SmartReplyUtil(handler: Handler?) {
 
     public var fileReader: BufferedReader? = null
     public var appContext:Context? = null
-    public var fileUri: Uri? = null
+    public var fileUri: String? = null
     public var filename: String? = ""
 
     fun updateUI(message: String, completed:Boolean) {
         Log.d("MM - updateUI", message)
-        var intent = Intent(appContext, FileConverstionActivity::class.java)
+        var intent = Intent(appContext, FileConversionActivity::class.java)
         if (completed == true) {
             intent.action = Utils.COMPLETED_JOB
         } else {
@@ -73,13 +73,18 @@ class SmartReplyUtil(handler: Handler?) {
             fileReader = null
         }
 
-        inputStream = appContext!!.contentResolver.openInputStream(fileUri!!)
+        val srcFile = File(
+            Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_DOWNLOADS
+            ), fileUri!!
+        )
 
-        if (inputStream == null) {
+        if (srcFile == null) {
             onClose()
             return
         }
-        fileReader = BufferedReader(InputStreamReader(inputStream))
+
+        fileReader = BufferedReader(FileReader(srcFile.path))
 
         if (fileReader == null) {
             onClose()

@@ -58,5 +58,14 @@
             app:layout_constraintStart_toStartOf="parent" android:layout_marginTop="200dp"
             android:layout_marginStart="10dp"/>
 
+    <Button
+            android:text="Text Conversion"
+            android:layout_width="match_parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent" android:layout_marginTop="300dp"
+            android:layout_marginStart="10dp"
+            android:layout_height="50dp"
+            android:id="@+id/textConvert"/>
+
 
 </android.support.constraint.ConstraintLayout>
